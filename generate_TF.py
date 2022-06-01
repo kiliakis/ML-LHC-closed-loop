@@ -1,18 +1,46 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy import signal as sgn
 
 ANALOG_ATTN = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9]   # in dB
 DIGITAL_ATTN = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9]  # in dB
 WRF = 2518300671.117578       #: RF frequency (angular)
+NP = 662
+FMAX = 1.619443e6
 
+
+def low_pass_filter(signal, cutoff_frequency=0.5):
+    """Low-pass filter based on Butterworth 5th order digital filter from
+    scipy,
+    http://docs.scipy.org
+
+    Parameters
+    ----------
+    signal : float array
+        Signal to be filtered
+    cutoff_frequency : float
+        Cutoff frequency [1] corresponding to a 3 dB gain drop, relative to the
+        Nyquist frequency of 1; default is 0.5
+
+    Returns
+    -------
+    float array
+        Low-pass filtered signal
+
+    """
+
+    b, a = sgn.butter(5, cutoff_frequency, 'low', analog=False)
+
+    return sgn.filtfilt(b, a, signal)
 
 class Generate_TF(object):
 
     def __init__(self):
 
-        self.frequency = np.linspace(-1.5e6, 1.5e6, 5000)
+        self.frequency = np.linspace(-FMAX, FMAX, NP)
         self.closed_loop_response(self.frequency)
+        self.noise = self.add_noise(relative_amplitude=0.2)
+        self.cl_response += self.noise
         self.bode_plot()
 
     def closed_loop_response(self, frequency):
@@ -28,25 +56,43 @@ class Generate_TF(object):
         feedback_model = self.feedback_TF(frequency,
             tau_a=170e-6,  #prm.analog.tau,
             tau_d=400e-6, #prm.digital.tau,
-            g_a=6.8e-6, #g_a,
+            g_a=2, #6.8e-6, #g_a,
             g_d=10, #g_d
 #            delta_phi=prm.digital.phase,
         )
 
         cavity_model = self.cavity_TF(frequency,
             delta_w=6e3, #prm.cavity.wr - self.WRF,
-            g_oo=2e-3,  # init guess, was 1e-2
+            g_oo=2e-3,  # init guess, was 1e-2 # range 2e-2 to 5e-4
             q=60000, #q_cl,
             w_rf=WRF
         )
 
         phase_model = self.phase_TF(frequency,
-            phi=-10,  # init guess, was 50
+            phi=0,  # init guess, was 50
             tau=650e-9 #prm.delay.loop,
         )
 
         tf_model = feedback_model*cavity_model*phase_model
         self.cl_response = tf_model/(1 - tf_model)
+
+
+    def add_noise(self, relative_amplitude, filter=True):
+
+        maximum = np.max(np.absolute(self.cl_response))
+
+        np.random.seed(1234)
+        noise_real = np.random.rand(NP) - 0.5
+        np.random.seed(5678)
+        noise_imag = np.random.rand(NP) - 0.5
+
+        if filter:
+            cutoff = 0.5 #1e4*2.*2e-4
+            noise_real = low_pass_filter(noise_real, cutoff_frequency=cutoff)
+            noise_imag = low_pass_filter(noise_imag, cutoff_frequency=cutoff)
+
+#        self.cl_response += (noise_real + 1j*noise_imag)*maximum*relative_amplitude
+        return (noise_real + 1j*noise_imag)*maximum*relative_amplitude
 
 
     def feedback_TF(self, frequency, tau_a, tau_d, g_a, g_d, delta_phi=0):
@@ -98,6 +144,9 @@ class Generate_TF(object):
         plt.figure("Amplitude")
         plt.plot(self.frequency, amplitude_dB)
 
+
+        phase = np.unwrap(phase)/np.pi*180
+        phase -= np.mean(phase)
         plt.figure("Phase")
         plt.plot(self.frequency, phase)
         plt.show()
