@@ -1,5 +1,4 @@
 import torch
-import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
@@ -10,8 +9,8 @@ from matplotlib import pyplot as plt
 class Net(nn.Module):
     def __init__(self, n_inputs, n_outputs, name='classifer', activation_func=F.gelu,
                  hidden_1=140, hidden_2=110, hidden_3=0,
-                 kernel_size=10, stride=10, trim_edges=120,
-                 with_batch_norm=False, save_best=True):
+                 avg_pool=(4, 4, 0), trim_edges=120, dropout=0.2,
+                 with_batch_norm=False, save_best=True, verbose=1):
         super(Net, self).__init__()
 
         self.history = {'train_loss': [], 'val_loss': [], 'train_accuracy': [], 'val_accuracy': []}
@@ -19,12 +18,17 @@ class Net(nn.Module):
         self.name = name
         self.save_best = save_best
         self.with_batch_norm = with_batch_norm
+        self.verbose=verbose
         # A layer that trims out the edges
         self.center = nn.ConstantPad1d(-trim_edges, 0)
         n_inputs -= 2 * trim_edges
 
         # An avgpooling layer to smoothen the curve
-        padding = 0
+        if len(avg_pool) == 3:
+            kernel_size, stride, padding = avg_pool
+        else:
+            kernel_size, stride = avg_pool
+            padding = 0
         n_pool_out = (n_inputs + 2 * padding - kernel_size) // stride + 1
         self.pool1 = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=padding)
 
@@ -50,7 +54,7 @@ class Net(nn.Module):
             self.fc3 = nn.Linear(hidden_2, n_outputs)
 
         # dropout prevents overfitting of data
-        self.dropout = nn.Dropout(0.2)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         # remove some points from the edges
@@ -146,12 +150,13 @@ class Net(nn.Module):
                 l_test_accuracy.append(self.__get_accuracy(output_test, y_test))
 
             if l_test_loss[-1] < min_test_loss:
-                print(
-                    f"Epoch {epoch + 1}/{num_epochs}: Test loss decreased ({min_test_loss:.6f} --> {l_test_loss[-1]:.6f})")
+                if self.verbose > 0:
+                    print(
+                        f"Epoch {epoch + 1}/{num_epochs}: Test loss decreased ({min_test_loss:.6f} --> {l_test_loss[-1]:.6f})")
                 best_model = self
                 min_test_loss = l_test_loss[-1]
 
-            if (epoch + 1) % 50 == 0:
+            if (epoch + 1) % 50 == 0 and self.verbose > 0:
                 print(
                     f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {l_train_loss[-1]:.4f}, Test Loss: {l_test_loss[-1]:.4f}")
 
