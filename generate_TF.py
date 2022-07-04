@@ -7,8 +7,12 @@ ANALOG_ATTN = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9]  # in dB
 DIGITAL_ATTN = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9]  # in dB
 WRF = 2518300671.117578  #: RF frequency (angular)
 NP = 662
-FMAX = 1.619443e6
+FMAX = 1.61944335975e6
 
+def get_freq(fmax, npoints):
+    negf = np.linspace(-fmax, 0, npoints//2, endpoint=False)
+    freq = np.append(negf, -negf[::-1])
+    return freq
 # The parameters are:
 # phase: phi (-20, 20), with step 1
 # gain: dgoo: (1e-4, 1e-2), 20 steps in total
@@ -44,7 +48,7 @@ class GenerateTF(object):
         self.fb_attn_index = fb_attn_index  # depends on cavity
         self.analog_attn = ANALOG_ATTN[self.fb_attn_index]
         self.digital_attn = DIGITAL_ATTN[self.fb_attn_index]
-        self.frequency = np.linspace(-FMAX, FMAX, NP)
+        self.frequency = get_freq(FMAX, NP)
         self.with_noise = with_noise
         # self.closed_loop_response(self.frequency)
         # self.noise = self.add_noise(relative_amplitude=0.2)

@@ -109,19 +109,11 @@ class Net(nn.Module):
             yhat = encoder.inverse_transform(yhat)
         return yhat
 
-    def save(self, optimizer, filename=None):
-        if not filename:
-            filename = self.name
-        torch.save({'model_state_dict': self.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict()}, filename)
+    def save(self, name='model.pt'):
+        torch.save(self.state_dict(), name)
 
-    def load(self, optimizer, filename):
-        checkpoint = torch.load(filename)
-        if 'optimizer_state_dict' not in checkpoint:
-            self.load_state_dict(checkpoint)
-        else:
-            self.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    def load(self, filename):
+        self.load_state_dict(torch.load(filename))
 
     def train_net(self, optimizer, criterion, X_train, y_train, X_test, y_test, num_epochs=100):
         l_train_loss = []
@@ -169,7 +161,7 @@ class Net(nn.Module):
                     f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {l_train_loss[-1]:.4f}, Test Loss: {l_test_loss[-1]:.4f}")
 
         if self.save_best:
-            best_model.save(optimizer, 'models/{self.name}.pt')
+            best_model.save(f'models/{self.name}.pt')
 
         self.history['train_loss'] += l_train_loss
         self.history['train_accuracy'] += l_train_accuracy
