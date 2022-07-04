@@ -169,7 +169,7 @@ class Net(nn.Module):
                     f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {l_train_loss[-1]:.4f}, Test Loss: {l_test_loss[-1]:.4f}")
 
         if self.save_best:
-            best_model.save(optimizer, 'models/{self.name}.pt')
+            best_model.save(optimizer, f'models/{self.name}.pt')
 
         self.history['train_loss'] += l_train_loss
         self.history['train_accuracy'] += l_train_accuracy
