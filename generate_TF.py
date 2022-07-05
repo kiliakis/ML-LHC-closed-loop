@@ -44,12 +44,13 @@ def low_pass_filter(signal, cutoff_frequency=0.5):
 
 class GenerateTF(object):
 
-    def __init__(self, fb_attn_index=3, with_noise=False):
+    def __init__(self, fb_attn_index=3, with_noise=False, noise_amplitude=0.2):
         self.fb_attn_index = fb_attn_index  # depends on cavity
         self.analog_attn = ANALOG_ATTN[self.fb_attn_index]
         self.digital_attn = DIGITAL_ATTN[self.fb_attn_index]
         self.frequency = get_freq(FMAX, NP)
         self.with_noise = with_noise
+        self.relative_amplitude = noise_amplitude
         # self.closed_loop_response(self.frequency)
         # self.noise = self.add_noise(relative_amplitude=0.2)
         # self.cl_response += self.noise
@@ -59,7 +60,7 @@ class GenerateTF(object):
     def __call__(self, frequency, phi=0, g_oo=2e-3):
         self.closed_loop_response(frequency, phi, g_oo)
         if self.with_noise:
-            self.noise = self.add_noise(relative_amplitude=0.2)
+            self.noise = self.add_noise(relative_amplitude=self.relative_amplitude)
             self.cl_response += self.noise
         amplitude_linear = np.absolute(self.cl_response)
         amplitude_dB = 20 * np.log10(amplitude_linear)
