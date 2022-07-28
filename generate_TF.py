@@ -57,14 +57,17 @@ class GenerateTF(object):
         # if plot:
         #     self.bode_plot()
 
-    def __call__(self, frequency, phi=0, g_oo=2e-3):
+    def __call__(self, frequency, phi=0, g_oo=2e-3, return_response=False):
         self.closed_loop_response(frequency, phi, g_oo)
         if self.with_noise:
             self.noise = self.add_noise(relative_amplitude=self.relative_amplitude)
             self.cl_response += self.noise
         amplitude_linear = np.absolute(self.cl_response)
         amplitude_dB = 20 * np.log10(amplitude_linear)
-        return amplitude_dB
+        if return_response:
+            return amplitude_dB, self.cl_response
+        else:
+            return amplitude_dB
 
     def closed_loop_response(self, frequency, phi, g_oo):
         # Use measured value
