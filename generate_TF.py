@@ -44,26 +44,30 @@ def low_pass_filter(signal, cutoff_frequency=0.5):
 
 class GenerateTF(object):
 
-    def __init__(self, fb_attn_index=3, with_noise=False):
+    def __init__(self, fb_attn_index=3, with_noise=False, noise_amplitude=0.2):
         self.fb_attn_index = fb_attn_index  # depends on cavity
         self.analog_attn = ANALOG_ATTN[self.fb_attn_index]
         self.digital_attn = DIGITAL_ATTN[self.fb_attn_index]
         self.frequency = get_freq(FMAX, NP)
         self.with_noise = with_noise
+        self.relative_amplitude = noise_amplitude
         # self.closed_loop_response(self.frequency)
         # self.noise = self.add_noise(relative_amplitude=0.2)
         # self.cl_response += self.noise
         # if plot:
         #     self.bode_plot()
 
-    def __call__(self, frequency, phi=0, g_oo=2e-3):
+    def __call__(self, frequency, phi=0, g_oo=2e-3, return_response=False):
         self.closed_loop_response(frequency, phi, g_oo)
         if self.with_noise:
-            self.noise = self.add_noise(relative_amplitude=0.2)
+            self.noise = self.add_noise(relative_amplitude=self.relative_amplitude)
             self.cl_response += self.noise
         amplitude_linear = np.absolute(self.cl_response)
         amplitude_dB = 20 * np.log10(amplitude_linear)
-        return amplitude_dB
+        if return_response:
+            return amplitude_dB, self.cl_response
+        else:
+            return amplitude_dB
 
     def closed_loop_response(self, frequency, phi, g_oo):
         # Use measured value

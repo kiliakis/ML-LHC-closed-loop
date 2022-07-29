@@ -2,88 +2,99 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
 from matplotlib import pyplot as plt
+from functools import partial
+from tensorflow import keras
 
 
-class Net(nn.Module):
-    def __init__(self, n_inputs, n_outputs, name='classifer', activation_func=F.gelu,
-                 hidden_1=140, hidden_2=110, hidden_3=0,
-                 avg_pool=(4, 4, 0), trim_edges=120, dropout=0.2,
-                 with_batch_norm=False, save_best=True, verbose=1):
-        super(Net, self).__init__()
+def get_keras_nn(n_inputs, n_outputs, name='phase_regressor', activation='relu',
+                 layers=[140, 110], kernel_size=5, stride=5, trim_edges=120,
+                 dropout=0.0, with_norm=False):
+    # initialize model
+    model = keras.models.Sequential(name=name)
+    # just set input shape
+    model.add(keras.Input(shape=n_inputs))
+    # crop the edges
+    model.add(keras.layers.Cropping1D(cropping=trim_edges, name='Crop'))
+    # smoothing layer
+    model.add(keras.layers.AveragePooling1D(pool_size=kernel_size, strides=stride,
+                                            name='AvgPool'))
+    # normalize input
+    model.add(keras.layers.BatchNormalization(axis=2, name='Norm_0'))
+    # flatten before the dense layers
+    model.add(keras.layers.Flatten(name='Flat'))
+    # for every layer
+    for i, layer_size in enumerate(layers):
+        # Add dense layer with activation_func
+        model.add(keras.layers.Dense(layer_size, activation=activation,
+                                     name=f'Dense_{i+1}'))
+        # Add batch normalization
+        if with_norm:
+            model.add(keras.layers.LayerNormalization(
+                axis=1, name=f'Norm_{i+1}'))
+        # Add dropout
+        if dropout > 0 and dropout < 1:
+            model.add(keras.layers.Dropout(dropout, name=f'Dropout_{i+1}'))
+    model.add(keras.layers.Dense(n_outputs, name=f'Output'))
+    return model
 
-        self.history = {'train_loss': [], 'val_loss': [], 'train_accuracy': [], 'val_accuracy': []}
-        self.activate = activation_func
-        self.name = name
-        self.save_best = save_best
-        self.with_batch_norm = with_batch_norm
-        self.verbose=verbose
-        # A layer that trims out the edges
-        self.center = nn.ConstantPad1d(-trim_edges, 0)
-        n_inputs -= 2 * trim_edges
 
-        # An avgpooling layer to smoothen the curve
-        if len(avg_pool) == 3:
-            kernel_size, stride, padding = avg_pool
+def plot_history(history, lines=('loss', 'val_loss'), epoch=(-1, -1)):
+    fig = plt.figure()
+
+    if epoch[0] == -1:
+        start_idx = 0
+    else:
+        start_idx = epoch[0]
+
+    for line in lines:
+        assert line in history
+        y = history[line]
+
+        if epoch[1] == -1:
+            end_idx = len(y)
         else:
-            kernel_size, stride = avg_pool
-            padding = 0
-        n_pool_out = (n_inputs + 2 * padding - kernel_size) // stride + 1
-        self.pool1 = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=padding)
+            end_idx = epoch[1]
+        y = y[start_idx: end_idx]
 
-        # linear layer (n_pool_out -> hidden_1)
-        self.fc1 = nn.Linear(n_pool_out, hidden_1)
-        if with_batch_norm:
-            self.batch_norm1 = nn.BatchNorm1d(hidden_1)
+        plt.plot(np.arange(start_idx, end_idx), y, label=line)
 
-        # linear layer (n_hidden -> hidden_2)
-        self.fc2 = nn.Linear(hidden_1, hidden_2)
-        if with_batch_norm:
-            self.batch_norm2 = nn.BatchNorm1d(hidden_2)
+    plt.xlabel('epoch')
+    plt.legend()
+    plt.show()
+    plt.close()
 
-        # linear layer (n_hidden -> n_outputs)
-        if hidden_3 > 0:
-            self.fc3 = nn.Linear(hidden_2, hidden_3)
-            if with_batch_norm:
-                self.batch_norm3 = nn.BatchNorm1d(hidden_3)
+    return fig
 
-            self.fc4 = nn.Linear(hidden_3, n_outputs)
-        else:
-            self.fc4 = None
-            self.fc3 = nn.Linear(hidden_2, n_outputs)
 
-        # dropout prevents overfitting of data
-        self.dropout = nn.Dropout(dropout)
+def standardize(x):
+    mean = x.mean(1, keepdim=True)
+    std = x.std(1, unbiased=False, keepdim=True)
+    x = (x - mean) / std
+    return x
+
+
+class NetBase(nn.Module):
+    def __init__(self, n_inputs, n_outputs, *args, **kwargs):
+        # This needs to be implemented
+        super(NetBase, self).__init__()
+        # absolutely required attributes
+        self.history = {'train_loss': [],
+                        'val_loss': [],
+                        'train_accuracy': [],
+                        'val_accuracy': []}
+        self.name = ''
+        self.save_best = False
+        self.verbose = 0
+        self.layers = []
+
+        return
 
     def forward(self, x):
-        # remove some points from the edges
-        x = self.center(x)
-        # This performs the average pooling layer
-        x = self.pool1(x)
-        # add hidden layer, with activation function and dropout
-        x = self.activate(self.fc1(x))
-        if self.with_batch_norm:
-            x = self.batch_norm1(x)
-        x = self.dropout(x)
-
-        # add hidden layer, with activation function and dropout
-        x = self.activate(self.fc2(x))
-        if self.with_batch_norm:
-            x = self.batch_norm2(x)
-        x = self.dropout(x)
-
-        if self.fc4:
-            x = self.activate(self.fc3(x))
-            if self.with_batch_norm:
-                x = self.batch_norm3(x)
-            x = self.dropout(x)
-            x = self.fc4(x)
-        else:
-            x = self.fc3(x)
-
-        # Output layer with Softmax activation
-        x = F.log_softmax(x, dim=1)
+        # This needs to be implemented too
+        # all the functions to be applied should be in a list
+        for layer in self.layers:
+            x = layer(x)
         return x
 
     def __get_accuracy(self, log_probs, labels):
@@ -155,7 +166,8 @@ class Net(nn.Module):
                 output_test = self(X_test)
                 test_loss = criterion(output_test, y_test)
                 l_test_loss.append(test_loss.item())
-                l_test_accuracy.append(self.__get_accuracy(output_test, y_test))
+                l_test_accuracy.append(
+                    self.__get_accuracy(output_test, y_test))
 
             if l_test_loss[-1] < min_test_loss:
                 if self.verbose > 0:
@@ -178,7 +190,7 @@ class Net(nn.Module):
 
         return l_train_loss, l_train_accuracy, l_test_loss, l_test_accuracy
 
-    def plot_history(self, lines=['train_loss', 'val_loss'], epoch=(-1, -1)):
+    def plot_history(self, lines=('train_loss', 'val_loss'), epoch=(-1, -1)):
         fig = plt.figure()
 
         if epoch[0] == -1:
@@ -204,3 +216,65 @@ class Net(nn.Module):
         plt.close()
 
         return fig
+
+
+class Net(NetBase):
+    def __init__(self, n_inputs, n_outputs, name='classifier', activation_func=F.gelu,
+                 hidden_layers=(140, 110), avg_pool=(4, 4, 0), trim_edges=120, dropout=0.2,
+                 with_batch_norm=False, save_best=True, scale_input=False, verbose=1):
+        super(NetBase, self).__init__()
+
+        self.history = {'train_loss': [],
+                        'val_loss': [],
+                        'train_accuracy': [],
+                        'val_accuracy': []}
+        self.name = name
+        self.save_best = save_best
+        self.verbose = verbose
+        self.layers = []
+
+        # Standardize the input samples across axis 1
+        # This is preferred so that the network can generalize in new data.
+        if scale_input:
+            self.scaler = standardize
+            self.layers.append(self.scaler)
+
+        # A layer that trims out the edges
+        self.center = nn.ConstantPad1d(-trim_edges, 0)
+        self.layers.append(self.center)
+
+        # An avgpooling layer to smoothen the curve
+        n_inputs -= 2 * trim_edges
+        if len(avg_pool) == 3:
+            kernel_size, stride, padding = avg_pool
+        else:
+            kernel_size, stride = avg_pool
+            padding = 0
+        n_pool_out = (n_inputs + 2 * padding - kernel_size) // stride + 1
+        self.avg_pool = nn.AvgPool1d(
+            kernel_size=kernel_size, stride=stride, padding=padding)
+        self.layers.append(self.avg_pool)
+
+        # this loop creates all the dense hidden layers
+        out_nodes = n_pool_out
+        for i, hidden_nodes in enumerate(hidden_layers):
+            in_nodes = out_nodes
+            out_nodes = hidden_nodes
+            setattr(self, f'fc{i}', nn.Linear(in_nodes, out_nodes))
+            setattr(self, f'activate{i}', activation_func)
+
+            self.layers += [getattr(self, f'fc{i}'),
+                            getattr(self, f'activate{i}')]
+            if with_batch_norm:
+                setattr(self, f'batch_norm{i}', nn.BatchNorm1d(out_nodes))
+                self.layers.append(getattr(self, f'batch_norm{i}'))
+            setattr(self, f'dropout{i}', nn.Dropout(dropout))
+            self.layers.append(getattr(self, f'dropout{i}'))
+
+        # Output layer
+        self.out_layer = nn.Linear(out_nodes, n_outputs)
+        self.layers.append(self.out_layer)
+
+        # final activation function
+        self.activate_out = partial(F.log_softmax, dim=1)
+        self.layers.append(self.activate_out)
