@@ -9,7 +9,8 @@ from tensorflow import keras
 
 def get_keras_nn(n_inputs, n_outputs, name='phase_regressor', activation='relu',
                  layers=[140, 110], kernel_size=5, stride=5, trim_edges=120,
-                 dropout=0.0, with_norm=False):
+                 dropout=0.0, with_norm=False, learning_rate='0.001',
+                 loss='mse'):
     # initialize model
     model = keras.models.Sequential(name=name)
     # just set input shape
@@ -36,6 +37,9 @@ def get_keras_nn(n_inputs, n_outputs, name='phase_regressor', activation='relu',
         if dropout > 0 and dropout < 1:
             model.add(keras.layers.Dropout(dropout, name=f'Dropout_{i+1}'))
     model.add(keras.layers.Dense(n_outputs, name=f'Output'))
+    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss=loss)
+
     return model
 
 
