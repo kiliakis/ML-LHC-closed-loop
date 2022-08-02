@@ -57,8 +57,8 @@ class GenerateTF(object):
         # if plot:
         #     self.bode_plot()
 
-    def __call__(self, frequency, phi=0, g_oo=2e-3, return_response=False):
-        self.closed_loop_response(frequency, phi, g_oo)
+    def __call__(self, frequency, phi=0, g_oo=2e-3, q=60000, return_response=False):
+        self.closed_loop_response(frequency, phi, g_oo, q)
         if self.with_noise:
             self.noise = self.add_noise(relative_amplitude=self.relative_amplitude)
             self.cl_response += self.noise
@@ -69,7 +69,7 @@ class GenerateTF(object):
         else:
             return amplitude_dB
 
-    def closed_loop_response(self, frequency, phi, g_oo):
+    def closed_loop_response(self, frequency, phi, g_oo, q=60000):
         # Use measured value
         #        g_a = prm.analog.gain*analog_attn
         #        g_d = (prm.digital.gain/g_a)*digital_gain*digital_attn
@@ -85,7 +85,7 @@ class GenerateTF(object):
         cavity_model = self.cavity_TF(frequency,
                                       delta_w=6e3,  # prm.cavity.wr - self.WRF,
                                       g_oo=g_oo,  # init guess, was 1e-2 # range 2e-2 to 5e-4
-                                      q=60000,  # q_cl,
+                                      q=q,  # q_cl,
                                       w_rf=WRF
                                       )
 
