@@ -9,6 +9,7 @@ WRF = 2518300671.117578  #: RF frequency (angular)
 NP = 662
 FMAX = 1.61944335975e6
 
+
 def get_freq(fmax, npoints):
     negf = np.linspace(-fmax, 0, npoints//2, endpoint=False)
     freq = np.append(negf, -negf[::-1])
@@ -16,6 +17,7 @@ def get_freq(fmax, npoints):
 # The parameters are:
 # phase: phi (-20, 20), with step 1
 # gain: dgoo: (1e-4, 1e-2), 20 steps in total
+
 
 def low_pass_filter(signal, cutoff_frequency=0.5):
     """Low-pass filter based on Butterworth 5th order digital filter from
@@ -57,10 +59,12 @@ class GenerateTF(object):
         # if plot:
         #     self.bode_plot()
 
-    def __call__(self, frequency, phi=0, g_oo=2e-3, q=60000, return_response=False):
-        self.closed_loop_response(frequency, phi, g_oo, q)
+    def __call__(self, frequency, phi=0, g_oo=2e-3, q=60000, g_a=2,
+                 return_response=False):
+        self.closed_loop_response(frequency, phi, g_oo, q=q, g_a=g_a)
         if self.with_noise:
-            self.noise = self.add_noise(relative_amplitude=self.relative_amplitude)
+            self.noise = self.add_noise(
+                relative_amplitude=self.relative_amplitude)
             self.cl_response += self.noise
         amplitude_linear = np.absolute(self.cl_response)
         amplitude_dB = 20 * np.log10(amplitude_linear)
@@ -69,7 +73,7 @@ class GenerateTF(object):
         else:
             return amplitude_dB
 
-    def closed_loop_response(self, frequency, phi, g_oo, q=60000):
+    def closed_loop_response(self, frequency, phi, g_oo, q=60000, g_a=2):
         # Use measured value
         #        g_a = prm.analog.gain*analog_attn
         #        g_d = (prm.digital.gain/g_a)*digital_gain*digital_attn
@@ -77,7 +81,7 @@ class GenerateTF(object):
         feedback_model = self.feedback_TF(frequency,
                                           tau_a=170e-6,  # prm.analog.tau,
                                           tau_d=400e-6,  # prm.digital.tau,
-                                          g_a=2,  # 6.8e-6, #g_a,
+                                          g_a=g_a,  # 6.8e-6, #g_a,
                                           g_d=10,  # g_d
                                           #            delta_phi=prm.digital.phase,
                                           )
@@ -137,7 +141,7 @@ class GenerateTF(object):
         w_r = w_rf + delta_w  # resonant frequency
 
         resp = g_oo * r_over_q * w_r * s / np.sqrt(q) / (
-                s ** 2 + (w_r / q) * s + w_r ** 2)
+            s ** 2 + (w_r / q) * s + w_r ** 2)
 
         return resp
 
